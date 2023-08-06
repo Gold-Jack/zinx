@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
+	"zinx/utils"
 	"zinx/ziface"
 )
 
@@ -12,20 +14,22 @@ type Server struct {
 	IpVersion string
 	Ip        string
 	Port      int
-	Conns     []Connection
 	Router    ziface.IRouter
 }
 
 func NewServer(ip string, port int) *Server {
-	server := &Server{
-		Ip:        ip,
+	// 先加载全局配置文件
+	utils.GlobalObject.Reload()
+
+	s := &Server{
+		Name:      utils.GlobalObject.Name,
 		IpVersion: "tcp4",
-		Port:      port,
-		Conns:     make([]Connection, 5),
+		Ip:        utils.GlobalObject.Host,
+		Port:      utils.GlobalObject.TcpPort,
 		Router:    nil,
 	}
 
-	return server
+	return s
 }
 
 func (s *Server) start() {
@@ -54,7 +58,7 @@ func (s *Server) start() {
 		uid++
 
 		go connection.Establish()
-		s.Conns = append(s.Conns, *connection)
+		// s.Conns = append(s.Conns, *connection)
 	}
 }
 
@@ -71,14 +75,26 @@ func CallBackToClient(conn *net.TCPConn, data []byte, cnt int) error {
 
 // 释放资源并关闭服务器
 func (s *Server) Stop() {
-	for _, connection := range s.Conns {
-		connection.Close()
-	}
+	// for _, connection := range s.Conns {
+	// 	connection.Close()
+	// }
+	fmt.Println("[STOP] Zinx server, name:", s.Name)
 }
 
 // server上线
 func (s *Server) Serve() {
+	// 这里打印的log主要是检测全局配置文件是否加载成功
+	fmt.Printf("[START] Server name: %s,listenner at IP: %s, Port %d is starting\n", s.Name, s.Ip, s.Port)
+	fmt.Printf("[Zinx] Version: %s, MaxConn: %d,  MaxPacketSize: %d\n",
+		utils.GlobalObject.Version,
+		utils.GlobalObject.MaxConn,
+		utils.GlobalObject.MaxPacketSize)
+
 	s.start()
+
+	for {
+		time.Sleep(10 * time.Second)
+	}
 }
 
 func (s *Server) AddRouter(router ziface.IRouter) {

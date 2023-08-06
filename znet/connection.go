@@ -1,6 +1,7 @@
 package znet
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -44,29 +45,44 @@ func (c *Connection) StartDataReader() {
 	defer fmt.Println("DataReader closing...")
 	defer c.Close()
 
-	const MAX_READ_BYTE = 512
+	// const MAX_READ_BYTE = 512
 	for {
-		buf := make([]byte, MAX_READ_BYTE)
-		_, err := c.Conn.Read(buf)
-		if err == io.EOF {
-			fmt.Println("client wants to close connection.")
+		// 创建拆解包实例对象
+		dp := NewDataPack()
+
+		// 读取客户端的Message head
+		header := make([]byte, dp.GetHeadLen())
+		if _, err := io.ReadFull(c.GetTCPConnection(), header); err == io.EOF {
+			fmt.Println("Client offline")
 			c.ExitBuffChan <- true
 			return
-		}
-		if err != nil {
-			fmt.Println("conn read error.")
+		} else if err != nil {
+			fmt.Println("Read message head error", err)
+			c.ExitBuffChan <- true
 			continue
 		}
 
-		// if err := c.CallBackFuncApi(c.Conn, buf, cnt); err != nil {
-		// 	fmt.Println("callback error.")
-		// 	c.ExitBuffChan <- true
-		// 	return
-		// }
+		msg, err := dp.Unpack(header)
+		if err != nil {
+			fmt.Println("unpack error.")
+			c.ExitBuffChan <- true
+			continue
+		}
+
+		var data []byte
+		if msg.GetDataLen() > 0 {
+			data = make([]byte, msg.GetDataLen())
+			if _, err := io.ReadFull(c.GetTCPConnection(), data); err != nil {
+				fmt.Println("read msg data error")
+				c.ExitBuffChan <- true
+				continue
+			}
+		}
+		msg.SetData(data)
 
 		req := &Request{
 			conn: c,
-			data: buf,
+			msg:  msg,
 		}
 
 		go func(request ziface.IRequest) {
@@ -96,4 +112,27 @@ func (c *Connection) GetConnId() uint32 {
 
 func (c *Connection) GetTCPConnection() *net.TCPConn {
 	return c.Conn
+}
+
+func (c *Connection) SendMsg(msgId uint32, data []byte) error {
+	if c.IsClosed {
+		return errors.New("connection closed when send data")
+	}
+
+	// 将data封包，并发送给客户端
+	dp := NewDataPack()
+	msg, err := dp.Pack(NewMessagePacket(msgId, data))
+	if err != nil {
+		fmt.Println("Pack error msgId:", msgId)
+		return errors.New("pack msg error")
+	}
+
+	// 写回客户端
+	if _, err := c.Conn.Write(msg); err != nil {
+		fmt.Println("Write msg error, msgId:", msgId)
+		c.ExitBuffChan <- true
+		return errors.New("write msg error")
+	}
+
+	return nil
 }
