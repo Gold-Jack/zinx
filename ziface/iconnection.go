@@ -10,8 +10,10 @@ type IConnection interface {
 	Close()
 
 	// 获取connection的uid
-	GetConnId()
+	GetConnId() uint32
+
+	GetTCPConnection() *net.TCPConn
 }
 
 // 回调函数
-type HandleFunc func(conn *net.TCPConn, data []byte, cnt int) error
+// type HandleFunc func(conn *net.TCPConn, data []byte, cnt int) error

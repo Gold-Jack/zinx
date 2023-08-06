@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"zinx/ziface"
 )
 
 type Server struct {
@@ -12,6 +13,7 @@ type Server struct {
 	Ip        string
 	Port      int
 	Conns     []Connection
+	Router    ziface.IRouter
 }
 
 func NewServer(ip string, port int) *Server {
@@ -20,6 +22,7 @@ func NewServer(ip string, port int) *Server {
 		IpVersion: "tcp4",
 		Port:      port,
 		Conns:     make([]Connection, 5),
+		Router:    nil,
 	}
 
 	return server
@@ -47,8 +50,8 @@ func (s *Server) start() {
 			continue
 		}
 
+		connection := NewConnection(tcpConn, uid, s.Router)
 		uid++
-		connection := NewConnection(tcpConn, uid, CallBackToClient)
 
 		go connection.Establish()
 		s.Conns = append(s.Conns, *connection)
@@ -71,11 +74,15 @@ func (s *Server) Stop() {
 	for _, connection := range s.Conns {
 		connection.Close()
 	}
-
-	return
 }
 
 // server上线
 func (s *Server) Serve() {
 	s.start()
+}
+
+func (s *Server) AddRouter(router ziface.IRouter) {
+	s.Router = router
+
+	fmt.Println("Add router succ.")
 }

@@ -8,20 +8,20 @@ import (
 )
 
 type Connection struct {
-	Conn            *net.TCPConn
-	connId          uint32
-	IsClosed        bool
-	CallBackFuncApi ziface.HandleFunc
-	ExitBuffChan    chan bool // 告知该connection已经停止的bufferChannel
+	Conn         *net.TCPConn
+	connId       uint32
+	IsClosed     bool
+	Router       ziface.IRouter // 该链接的处理方法
+	ExitBuffChan chan bool      // 告知该connection已经停止的bufferChannel
 }
 
-func NewConnection(conn *net.TCPConn, connId uint32, callBackFunApi ziface.HandleFunc) *Connection {
+func NewConnection(conn *net.TCPConn, connId uint32, router ziface.IRouter) *Connection {
 	connection := &Connection{
-		Conn:            conn,
-		connId:          connId,
-		IsClosed:        false,
-		CallBackFuncApi: callBackFunApi,
-		ExitBuffChan:    make(chan bool, 1),
+		Conn:         conn,
+		connId:       connId,
+		IsClosed:     false,
+		Router:       router,
+		ExitBuffChan: make(chan bool, 1),
 	}
 
 	return connection
@@ -47,7 +47,7 @@ func (c *Connection) StartDataReader() {
 	const MAX_READ_BYTE = 512
 	for {
 		buf := make([]byte, MAX_READ_BYTE)
-		cnt, err := c.Conn.Read(buf)
+		_, err := c.Conn.Read(buf)
 		if err == io.EOF {
 			fmt.Println("client wants to close connection.")
 			c.ExitBuffChan <- true
@@ -58,11 +58,23 @@ func (c *Connection) StartDataReader() {
 			continue
 		}
 
-		if err := c.CallBackFuncApi(c.Conn, buf, cnt); err != nil {
-			fmt.Println("callback error.")
-			c.ExitBuffChan <- true
-			return
+		// if err := c.CallBackFuncApi(c.Conn, buf, cnt); err != nil {
+		// 	fmt.Println("callback error.")
+		// 	c.ExitBuffChan <- true
+		// 	return
+		// }
+
+		req := &Request{
+			conn: c,
+			data: buf,
 		}
+
+		go func(request ziface.IRequest) {
+			// 执行注册路由的Handle方法集
+			c.Router.PreHandle(request)
+			c.Router.Handle(request)
+			c.Router.PostHandle(request)
+		}(req)
 	}
 }
 
@@ -80,4 +92,8 @@ func (c *Connection) Close() {
 
 func (c *Connection) GetConnId() uint32 {
 	return c.connId
+}
+
+func (c *Connection) GetTCPConnection() *net.TCPConn {
+	return c.Conn
 }
