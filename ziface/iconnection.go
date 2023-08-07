@@ -20,7 +20,11 @@ type IConnection interface {
 
 	// 带缓冲的发送方式
 	SendBuffMsg(msgId uint32, data []byte) error
-}
 
-// 回调函数
-// type HandleFunc func(conn *net.TCPConn, data []byte, cnt int) error
+	/*
+		允许连接绑定用户信息
+	*/
+	SetProperty(key string, value interface{})
+	GetProperty(key string) (interface{}, error)
+	RemoveProperty(key string)
+}

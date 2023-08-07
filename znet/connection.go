@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"zinx/utils"
 	"zinx/ziface"
 )
@@ -18,6 +19,12 @@ type Connection struct {
 	ExitBuffChan chan bool              // 告知该connection已经停止的bufferChannel
 	msgChan      chan []byte            // 无缓冲管道，用于读、写两个goroutine之间的通信
 	msgBuffChan  chan []byte            // 有缓冲管道
+
+	/*
+		用户信息
+	*/
+	property     map[string]interface{}
+	propertyLock sync.RWMutex
 }
 
 func NewConnection(server ziface.IServer, conn *net.TCPConn, connId uint32, msgHandler ziface.IMessageHandler) *Connection {
@@ -30,6 +37,8 @@ func NewConnection(server ziface.IServer, conn *net.TCPConn, connId uint32, msgH
 		ExitBuffChan: make(chan bool, 1),
 		msgChan:      make(chan []byte),
 		msgBuffChan:  make(chan []byte, utils.GlobalObject.MaxMsgBuffChanLen),
+		property:     make(map[string]interface{}),
+		propertyLock: sync.RWMutex{},
 	}
 
 	return connection
@@ -146,14 +155,14 @@ func (c *Connection) Close() {
 	// 执行连接关闭前的hook函数
 	c.Server.CallOnConnectionStop(c)
 
-	// 从manager中移除当前connection
-	c.Server.GetConnectionManager().Remove(c)
-
 	// 关闭socket连接
 	c.Conn.Close()
 
 	// 发送connection关闭通知
 	c.ExitBuffChan <- true
+
+	// 从manager中移除当前connection
+	c.Server.GetConnectionManager().Remove(c)
 
 	// 关闭所有管道
 	close(c.ExitBuffChan)
@@ -203,4 +212,29 @@ func (c *Connection) SendBuffMsg(msgId uint32, data []byte) error {
 	c.msgBuffChan <- msg
 
 	return nil
+}
+
+func (c *Connection) SetProperty(key string, value interface{}) {
+	c.propertyLock.Lock()
+	defer c.propertyLock.Unlock()
+
+	c.property[key] = value
+}
+
+func (c *Connection) GetProperty(key string) (interface{}, error) {
+	c.propertyLock.Lock()
+	defer c.propertyLock.Unlock()
+
+	if value, exist := c.property[key]; exist {
+		return value, nil
+	} else {
+		return nil, errors.New("no property found")
+	}
+}
+
+func (c *Connection) RemoveProperty(key string) {
+	c.propertyLock.Lock()
+	defer c.propertyLock.Unlock()
+
+	delete(c.property, key)
 }
