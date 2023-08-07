@@ -1,0 +1,14 @@
+{
+    "Name": "zinx server",
+    "Host": "127.0.0.1",
+    "TcpPort": 8888,
+
+    "Version": "Zinx v8.0",
+    "MaxConn": 3,
+    "WorkerPoolSize": 10,
+    "MaxWorkerTaskLen": 1024,
+    "MaxConnectionCount": 3,
+    "MaxMsgBuffChanLen": 1024,
+
+    "ConfigFilePath": "config/application.json"
+}
