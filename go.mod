@@ -1,3 +1,3 @@
-module github.com/gold-jack/zinx
+module github.com/Gold-Jack/zinx
 
 go 1.20
